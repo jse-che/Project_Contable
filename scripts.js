@@ -1,8 +1,7 @@
-var tableData = []; // Array para almacenar los datos de la tabla
+var tableData = [];
 var pdfFiles = [];
 var xmlFiles = [];
 
-// Event listeners
 document.getElementById("cargarCatalogo").addEventListener("click", triggerFileInput);
 document.getElementById("fileInput").addEventListener("change", handleFileInputChange);
 document.getElementById("descargarArchivos").addEventListener("click", descargarArchivos);
@@ -18,7 +17,7 @@ async function handleFileInputChange(event) {
         tableData = [];
         pdfFiles = [];
         xmlFiles = [];
-        tableData.push(["Fecha", "No.Factura", "Empresa", "Nit", "CUFE", "SubTotal", "IVA", "Total"]); // Encabezados de la tabla
+        tableData.push(["Fecha", "No.Factura", "Empresa", "Nit", "CUFE", "SubTotal", "IVA", "Total", "Nombre Item"]);
         const filePromises = Array.from(files).map(file => readZipFile(file));
         await Promise.all(filePromises);
         renderTable();
@@ -32,7 +31,7 @@ function readZipFile(file) {
                 zip.forEach((relativePath, zipEntry) => {
                     zipEntry.async("blob").then(blob => {
                         if (relativePath.endsWith(".xml")) {
-                            readXmlFile(blob);
+                            readXmlFile(blob, zipEntry.name);
                             xmlFiles.push({ name: zipEntry.name, content: blob });
                         } else if (relativePath.endsWith(".pdf")) {
                             pdfFiles.push({ name: zipEntry.name, content: blob });
@@ -48,12 +47,12 @@ function readZipFile(file) {
     });
 }
 
-function readXmlFile(file) {
+function readXmlFile(file, fileName) {
     var reader = new FileReader();
     reader.onload = function(e) {
         var xmlContent = e.target.result;
         try {
-            procesarXML(xmlContent);
+            procesarXML(xmlContent, fileName);
         } catch (error) {
             console.error("Error procesando archivo XML", error);
         }
@@ -61,7 +60,7 @@ function readXmlFile(file) {
     reader.readAsText(file);
 }
 
-function procesarXML(xmlContent) {
+function procesarXML(xmlContent, fileName) {
     var parser = new DOMParser();
     var docXML = parser.parseFromString(xmlContent, "application/xml");
 
@@ -76,9 +75,9 @@ function procesarXML(xmlContent) {
 
     var issueDate = getElementTextContent(innerDoc, "cbc:IssueDate", "N/A");
     var parentDocumentID = getElementTextContent(innerDoc, "cbc:ID", "N/A");
-    var taxableAmount = formatCurrency(getElementTextContent(innerDoc, "cbc:TaxableAmount", "0.00"));
-    var taxAmount = formatCurrency(getElementTextContent(innerDoc, "cbc:TaxAmount", "0.00"));
-    var payableAmount = formatCurrency(getElementTextContent(innerDoc, "cbc:PayableAmount", "0.00"));
+    var taxableAmount = parseFloat(getElementTextContent(innerDoc, "cbc:TaxExclusiveAmount", "0.00"));
+    var taxAmount = parseFloat(getElementTextContent(innerDoc, "cbc:TaxAmount", "0.00"));
+    var payableAmount = parseFloat(getElementTextContent(innerDoc, "cbc:PayableAmount", "0.00"));
     var senderParty = innerDoc.getElementsByTagName("cac:AccountingSupplierParty")[0];
     var cufe = getElementTextContent(innerDoc, "cbc:UUID", "N/A");
     if (!senderParty) {
@@ -88,7 +87,9 @@ function procesarXML(xmlContent) {
     var registrationName = getElementTextContent(senderParty, "cbc:RegistrationName", "N/A");
     var companyID = getElementTextContent(senderParty, "cbc:CompanyID", "N/A");
 
-    tableData.push([issueDate, parentDocumentID, registrationName, companyID, cufe, taxableAmount, taxAmount, payableAmount]);
+    var xmlFileNameWithoutExtension = fileName.replace(".xml", "");
+
+    tableData.push([issueDate, parentDocumentID, registrationName, companyID, cufe, taxableAmount, taxAmount, payableAmount, xmlFileNameWithoutExtension]);
     renderTable();
 }
 
@@ -102,7 +103,7 @@ function formatCurrency(value) {
 }
 
 function renderTable() {
-    var tablaHTML = `<h2>Factura</h2><table><tr><th>Fecha</th><th>No.Factura</th><th>Empresa</th><th>Nit</th><th>CUFE</th><th>SubTotal</th><th>IVA</th><th>Total</th></tr>`;
+    var tablaHTML = `<h2>Factura</h2><table><tr><th>Fecha</th><th>No.Factura</th><th>Empresa</th><th>Nit</th><th>CUFE</th><th>SubTotal</th><th>IVA</th><th>Total</th><th>Nombre Item</th></tr>`;
     tableData.slice(1).forEach(row => {
         tablaHTML += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`;
     });
@@ -120,16 +121,17 @@ function exportToExcel() {
     var ws = XLSX.utils.aoa_to_sheet(tableData);
     styleSheet(ws);
     XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
-    XLSX.writeFile(wb, "Catalogo.xlsx");
+    XLSX.writeFile(wb, "Resumen.xlsx");
 }
 
 function styleSheet(ws) {
     ws['!cols'] = [
-        { wpx: 120 }, // Ancho de columna para Fecha
-        { wpx: 120 }, // Ancho de columna para No.Factura
-        { wpx: 200 }, // Ancho de columna para Empresa
-        { wpx: 150 }, // Ancho de columna para Nit
-        { wpx: 150 }  // Ancho de columna para Valor
+        { wpx: 120 },
+        { wpx: 120 }, 
+        { wpx: 200 }, 
+        { wpx: 150 }, 
+        { wpx: 150 },
+        { wpx: 200 }  
     ];
 
     var headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FFFF00" } }, alignment: { horizontal: "center" } };
@@ -169,7 +171,7 @@ function descargarArchivos() {
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(tableData);
     styleSheet(ws);
-    XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
+    XLSX.utils.book_append_sheet(wb, ws, "Resumen");
     var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
     function s2ab(s) {
         var buf = new ArrayBuffer(s.length);
@@ -177,7 +179,7 @@ function descargarArchivos() {
         for (var i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
         return buf;
     }
-    zip.file("Catalogo.xlsx", s2ab(wbout), { binary: true });
+    zip.file("Resumen.xlsx", s2ab(wbout), { binary: true });
 
     // Descargar el ZIP
     zip.generateAsync({ type: "blob" }).then(function(content) {

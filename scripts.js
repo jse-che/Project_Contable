@@ -17,7 +17,7 @@ async function handleFileInputChange(event) {
         tableData = [];
         pdfFiles = [];
         xmlFiles = [];
-        tableData.push(["Fecha", "No.Factura", "Empresa", "Nit", "CUFE", "SubTotal", "IVA", "Total", "Nombre Item"]);
+        tableData.push(["Fecha", "No.Factura", "Empresa", "Nit", "CUFE", "SubTotal", "IVA", "Total", "Nombre Factura"]);
         const filePromises = Array.from(files).map(file => readZipFile(file));
         await Promise.all(filePromises);
         renderTable();
@@ -103,7 +103,7 @@ function formatCurrency(value) {
 }
 
 function renderTable() {
-    var tablaHTML = `<h2>Factura</h2><table><tr><th>Fecha</th><th>No.Factura</th><th>Empresa</th><th>Nit</th><th>CUFE</th><th>SubTotal</th><th>IVA</th><th>Total</th><th>Nombre Item</th></tr>`;
+    var tablaHTML = `<h2>Factura</h2><table><tr><th>Fecha</th><th>No.Factura</th><th>Empresa</th><th>Nit</th><th>CUFE</th><th>SubTotal</th><th>IVA</th><th>Total</th><th>Nombre Factura</th></tr>`;
     tableData.slice(1).forEach(row => {
         tablaHTML += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`;
     });

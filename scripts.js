@@ -1,7 +1,3 @@
-var tableData = [];
-var pdfFiles = [];
-var xmlFiles = [];
-
 document.getElementById("cargarCatalogo").addEventListener("click", triggerFileInput);
 document.getElementById("fileInput").addEventListener("change", handleFileInputChange);
 document.getElementById("descargarArchivos").addEventListener("click", descargarArchivos);
@@ -30,11 +26,12 @@ function readZipFile(file) {
             .then(zip => {
                 zip.forEach((relativePath, zipEntry) => {
                     zipEntry.async("blob").then(blob => {
-                        if (relativePath.endsWith(".xml")) {
-                            readXmlFile(blob, zipEntry.name);
-                            xmlFiles.push({ name: zipEntry.name, content: blob });
-                        } else if (relativePath.endsWith(".pdf")) {
-                            pdfFiles.push({ name: zipEntry.name, content: blob });
+                        const fileName = zipEntry.name.split("/").pop();
+                        if (fileName.endsWith(".xml")) {
+                            readXmlFile(blob, fileName);
+                            xmlFiles.push({ name: fileName, content: blob });
+                        } else if (fileName.endsWith(".pdf")) {
+                            pdfFiles.push({ name: fileName, content: blob });
                         }
                     });
                 });
@@ -52,7 +49,9 @@ function readXmlFile(file, fileName) {
     reader.onload = function(e) {
         var xmlContent = e.target.result;
         try {
-            procesarXML(xmlContent, fileName);
+            // Eliminar el prefijo "XML_" del nombre del archivo
+            var cleanedFileName = fileName.replace(/^XML_/, '');
+            procesarXML(xmlContent, cleanedFileName);
         } catch (error) {
             console.error("Error procesando archivo XML", error);
         }
@@ -67,30 +66,50 @@ function procesarXML(xmlContent, fileName) {
     var descriptionElement = docXML.getElementsByTagName("cbc:Description")[0];
     if (!descriptionElement) {
         console.error("El elemento cbc:Description no se encontró en el XML.");
+        fillRowWithNA(fileName);
         return;
     }
-    var cdataContent = descriptionElement.textContent;
 
+    var cdataContent = descriptionElement.textContent;
     var innerDoc = parser.parseFromString(cdataContent, "application/xml");
 
     var issueDate = getElementTextContent(innerDoc, "cbc:IssueDate", "N/A");
+    issueDate = formatDate(issueDate);
     var parentDocumentID = getElementTextContent(innerDoc, "cbc:ID", "N/A");
-    var taxableAmount = parseFloat(getElementTextContent(innerDoc, "cbc:TaxExclusiveAmount", "0.00"));
+    var taxableAmount = parseFloat(getElementTextContent(innerDoc, "cbc:LineExtensionAmount", "0.00"));
     var taxAmount = parseFloat(getElementTextContent(innerDoc, "cbc:TaxAmount", "0.00"));
     var payableAmount = parseFloat(getElementTextContent(innerDoc, "cbc:PayableAmount", "0.00"));
-    var senderParty = innerDoc.getElementsByTagName("cac:AccountingSupplierParty")[0];
     var cufe = getElementTextContent(innerDoc, "cbc:UUID", "N/A");
-    if (!senderParty) {
-        console.error("El elemento cac:AccountingSupplierParty no se encontró en el XML.");
-        return;
-    }
-    var registrationName = getElementTextContent(senderParty, "cbc:RegistrationName", "N/A");
-    var companyID = getElementTextContent(senderParty, "cbc:CompanyID", "N/A");
 
-    var xmlFileNameWithoutExtension = fileName.replace(".xml", "");
+    var senderParty = innerDoc.getElementsByTagName("cac:AccountingSupplierParty")[0];
+    var registrationName = "N/A";
+    var companyID = "N/A";
+
+    if (senderParty) {
+        registrationName = getElementTextContent(senderParty, "cbc:RegistrationName", "N/A");
+        companyID = getElementTextContent(senderParty, "cbc:CompanyID", "N/A");
+    } else {
+        showModal(`El archivo ${fileName} no pudo leerse correctamente.`);
+        console.error("El elemento cac:AccountingSupplierParty no se encontró en el XML.");
+    }
+
+    var xmlFileNameWithoutExtension = fileName.split("/").pop().replace(".xml", "");
 
     tableData.push([issueDate, parentDocumentID, registrationName, companyID, cufe, taxableAmount, taxAmount, payableAmount, xmlFileNameWithoutExtension]);
     renderTable();
+}
+
+function fillRowWithNA(fileName) {
+    // Eliminar el prefijo "XML_" del nombre del archivo
+    var cleanedFileName = fileName.replace(/^XML_/, '');
+    var xmlFileNameWithoutExtension = cleanedFileName.split("/").pop().replace(".xml", "");
+    tableData.push(["N/A", "N/A", "N/A", "N/A", "N/A", "0.00", "0.00", "0.00", xmlFileNameWithoutExtension]);
+    renderTable();
+}
+function formatDate(dateString) {
+    if (dateString === "N/A") return dateString;
+    var dateParts = dateString.split("-");
+    return `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
 }
 
 function getElementTextContent(parent, tagName, defaultValue) {
@@ -113,38 +132,37 @@ function renderTable() {
 
 function exportToExcel() {
     if (tableData.length === 0) {
-        alert("Por favor, cargue archivos XML primero.");
+        showModal("Por favor, cargue archivos XML primero.");
         return;
     }
 
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.aoa_to_sheet(tableData);
     styleSheet(ws);
-    XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
-    XLSX.writeFile(wb, "Resumen.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Facturas");
+    var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+    saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), 'Facturas.xlsx');
+}
+
+function s2ab(s) {
+    var buf = new ArrayBuffer(s.length);
+    var view = new Uint8Array(buf);
+    for (var i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+    return buf;
 }
 
 function styleSheet(ws) {
     ws['!cols'] = [
-        { wpx: 120 },
+        { wpx: 101 },
+        { wpx: 140 },
+        { wpx: 300 },
+        { wpx: 100 },
+        { wpx: 600 }, 
+        { wpx: 130 }, 
         { wpx: 120 }, 
-        { wpx: 200 }, 
-        { wpx: 150 }, 
-        { wpx: 150 },
-        { wpx: 200 }  
+        { wpx: 130 },
+        { wpx: 220 }
     ];
-
-    var headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FFFF00" } }, alignment: { horizontal: "center" } };
-    var borderStyle = { border: { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } } };
-
-    for (var cell in ws) {
-        if (cell[0] === '!' || ws[cell].v === undefined) continue;
-        ws[cell].s = ws[cell].s || {};
-        if (cell.match(/^[A-G]1$/)) {
-            Object.assign(ws[cell].s, headerStyle);
-        }
-        Object.assign(ws[cell].s, borderStyle);
-    }
 }
 
 function descargarArchivos() {
@@ -186,3 +204,18 @@ function descargarArchivos() {
         saveAs(content, "archivos.zip");
     });
 }
+
+function showModal(message) {
+    document.getElementById('modalMessage').textContent = message;
+    document.getElementById('modal').style.display = 'block';
+}
+
+document.getElementById('closeModal').addEventListener('click', function() {
+    document.getElementById('modal').style.display = 'none';
+});
+
+window.addEventListener('click', function(event) {
+    if (event.target === document.getElementById('modal')) {
+        document.getElementById('modal').style.display = 'none';
+    }
+});

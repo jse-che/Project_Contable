@@ -4,18 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KontaTool</title>
-    <link rel="stylesheet" href="styles.css">
     <link rel="shortcut icon" href="/img/6EEF0994-AD20-4A8D-8715-C7B6EC1DE2AD1.jpg">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="texto">
         <h1>KontaTool</h1>
         <input type="file" id="fileInput" multiple style="display:none;">
-        <button id="cargarCatalogo">Cargar Catálogo</button>
+        <button id="cargarCatalogo">Subir Facturas</button>
         <button id="descargarArchivos">Descargar Archivos</button>
         <div id="tablasContainer"></div>
     </div>
-    <div id="tablasContainer"></div>
+    
+    <!-- Modal -->
+    <div id="modal">
+        <div id="modalContent">
+            <span id="closeModal">&times;</span>
+            <p id="modalMessage"></p>
+        </div>
+    </div>
     
     <!-- Importar la biblioteca SheetJS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -24,4 +31,3 @@
     <script src="scripts.js" type="text/javascript"></script>   
 </body>
 </html>
-    
